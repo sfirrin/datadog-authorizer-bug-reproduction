@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform:
+  - AWS::Serverless-2016-10-31
+  # - Name: DatadogServerless
+  #   Parameters:
+  #     pythonLayerVersion: 58
+
+Description: Test lambda. SAM Template for DD Test
+
+Parameters:
+  StageName:
+    Type: String
+    Description: The name of the API stage
+    Default: dev
+
+Resources:
+  MyHttpApi:
+    Type: AWS::Serverless::HttpApi
+    DependsOn: AuthorizerFunction
+    Properties:
+      StageName: !Ref StageName
+      Auth:
+        Authorizers:
+          LambdaAuthorizer:
+            AuthorizerPayloadFormatVersion: 2.0
+            EnableSimpleResponses: false
+            FunctionArn: !GetAtt AuthorizerFunction.Arn
+            FunctionInvokeRole: !GetAtt ApiGatewayRole.Arn
+            Identity:
+              Headers:
+                - Authorization
+              ReauthorizeEvery: 300
+
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: dd-test
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+
+  ApiGatewayRole:
+    Type: AWS::IAM::Role
+    DependsOn: AuthorizerFunction
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "apigateway.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: "AllowApiGatewayInvokeFunction"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: !GetAtt AuthorizerFunction.Arn
